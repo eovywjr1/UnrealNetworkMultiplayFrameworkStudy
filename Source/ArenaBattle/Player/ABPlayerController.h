@@ -19,8 +19,10 @@ class ARENABATTLE_API AABPlayerController : public APlayerController
 public:
 	AABPlayerController();
 	
-protected:
-	virtual void BeginPlay() override;
+private:
+	virtual void PostInitializeComponents() override final;
+	virtual void PostNetInit() override final;
+	virtual void BeginPlay() override final;
 	
 // HUD Section
 protected:
