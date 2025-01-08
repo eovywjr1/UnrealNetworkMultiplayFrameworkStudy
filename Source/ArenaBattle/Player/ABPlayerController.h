@@ -23,6 +23,7 @@ private:
 	virtual void PostInitializeComponents() override final;
 	virtual void PostNetInit() override final;
 	virtual void BeginPlay() override final;
+	virtual void OnPossess(APawn* InPawn) override final;
 	
 // HUD Section
 protected:

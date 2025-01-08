@@ -22,6 +22,10 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void SetDead() override;
+	
+private:
+	virtual void PossessedBy(AController* NewController) override final;
+	virtual void PostNetInit() override final;
 
 public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
