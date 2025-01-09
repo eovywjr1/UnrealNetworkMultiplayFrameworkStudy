@@ -3,11 +3,12 @@
 
 #include "Prop/ABFountain.h"
 #include "Components/StaticMeshComponent.h"
+#include "Net/UnrealNetwork.h"
 
 // Sets default values
 AABFountain::AABFountain()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
 	Body = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Body"));
@@ -28,13 +29,14 @@ AABFountain::AABFountain()
 	{
 		Water->SetStaticMesh(WaterMeshRef.Object);
 	}
+
+	bReplicates = true;
 }
 
 // Called when the game starts or when spawned
 void AABFountain::BeginPlay()
 {
 	Super::BeginPlay();
-	
 }
 
 // Called every frame
@@ -42,5 +44,24 @@ void AABFountain::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if (HasAuthority())
+	{
+		const float RotationRate = 30.0f;
+		AddActorLocalRotation(FRotator(0.0f, RotationRate * DeltaTime, 0.0f));
+		ServerRotationYaw = RootComponent->GetComponentRotation().Yaw;
+	}
 }
 
+void AABFountain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(AABFountain, ServerRotationYaw);
+}
+
+void AABFountain::OnRep_ServerRotationYaw()
+{
+	FRotator NewRotator = RootComponent->GetComponentRotation();
+	NewRotator.Yaw = ServerRotationYaw;
+	RootComponent->SetWorldRotation(NewRotator);
+}

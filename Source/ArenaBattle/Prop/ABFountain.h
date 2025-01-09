@@ -10,8 +10,8 @@ UCLASS()
 class ARENABATTLE_API AABFountain : public AActor
 {
 	GENERATED_BODY()
-	
-public:	
+
+public:
 	// Sets default values for this actor's properties
 	AABFountain();
 
@@ -19,7 +19,7 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-public:	
+public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
@@ -29,4 +29,13 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category = Mesh)
 	TObjectPtr<class UStaticMeshComponent> Water;
 
+private:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override final;
+
+	UFUNCTION()
+	void OnRep_ServerRotationYaw();
+
+private:
+	UPROPERTY(ReplicatedUsing=OnRep_ServerRotationYaw)
+	float ServerRotationYaw;
 };
