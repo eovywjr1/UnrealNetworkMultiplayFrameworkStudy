@@ -38,4 +38,7 @@ private:
 private:
 	UPROPERTY(ReplicatedUsing=OnRep_ServerRotationYaw)
 	float ServerRotationYaw;
+	
+	float ClientTimeSinceUpdate = 0.0f;
+	float ClientTimeBetweenLastUpdate = 0.0f;
 };
