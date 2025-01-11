@@ -2,6 +2,9 @@
 
 
 #include "Prop/ABFountain.h"
+
+#include "ArenaBattle.h"
+#include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Net/UnrealNetwork.h"
 
@@ -32,12 +35,27 @@ AABFountain::AABFountain()
 
 	bReplicates = true;
 	NetUpdateFrequency = 1.0f;
+	// NetDormancy = DORM_Initial;
 }
 
 // Called when the game starts or when spawned
 void AABFountain::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (HasAuthority())
+	{
+		// 휴면 상태 해지
+		FlushNetDormancy();
+	
+		FTimerHandle TimerHandle;
+		GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
+			                                       {
+				                                       ServerLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+				                                       OnRep_ServerLightColor();
+			                                       }
+			                                       ), 1.0f, true, 0.0f);
+	}
 }
 
 // Called every frame
@@ -60,7 +78,7 @@ void AABFountain::Tick(float DeltaTime)
 		{
 			const float EstimateRotationYaw = ServerRotationYaw + RotationRate * ClientTimeBetweenLastUpdate;
 			const float LerpRatio = ClientTimeSinceUpdate / ClientTimeBetweenLastUpdate;
-			
+
 			FRotator ClientRotator = RootComponent->GetComponentRotation();
 			ClientRotator.Yaw = FMath::Lerp(ServerRotationYaw, EstimateRotationYaw, LerpRatio);
 			RootComponent->SetWorldRotation(ClientRotator);
@@ -68,11 +86,18 @@ void AABFountain::Tick(float DeltaTime)
 	}
 }
 
+void AABFountain::PreReplication(IRepChangedPropertyTracker& ChangedPropertyTracker)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+	Super::PreReplication(ChangedPropertyTracker);
+}
+
 void AABFountain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AABFountain, ServerRotationYaw);
+	DOREPLIFETIME_CONDITION(AABFountain, ServerLightColor, COND_InitialOnly);
 }
 
 void AABFountain::OnRep_ServerRotationYaw()
@@ -83,4 +108,12 @@ void AABFountain::OnRep_ServerRotationYaw()
 
 	ClientTimeBetweenLastUpdate = ClientTimeSinceUpdate;
 	ClientTimeSinceUpdate = 0.0f;
+}
+
+void AABFountain::OnRep_ServerLightColor()
+{
+	if (UPointLightComponent* PointLightComponent = FindComponentByClass<UPointLightComponent>())
+	{
+		PointLightComponent->SetLightColor(ServerLightColor);
+	}
 }

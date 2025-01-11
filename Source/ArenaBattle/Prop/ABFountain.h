@@ -30,10 +30,15 @@ public:
 	TObjectPtr<class UStaticMeshComponent> Water;
 
 private:
+	virtual void PreReplication(IRepChangedPropertyTracker & ChangedPropertyTracker) override final;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override final;
 
 	UFUNCTION()
 	void OnRep_ServerRotationYaw();
+
+	UFUNCTION()
+	void OnRep_ServerLightColor();
 
 private:
 	UPROPERTY(ReplicatedUsing=OnRep_ServerRotationYaw)
@@ -41,4 +46,7 @@ private:
 	
 	float ClientTimeSinceUpdate = 0.0f;
 	float ClientTimeBetweenLastUpdate = 0.0f;
+	
+	UPROPERTY(ReplicatedUsing=OnRep_ServerLightColor)
+	FLinearColor ServerLightColor;
 };
