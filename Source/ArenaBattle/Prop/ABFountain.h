@@ -30,7 +30,7 @@ public:
 	TObjectPtr<class UStaticMeshComponent> Water;
 
 private:
-	virtual void PreReplication(IRepChangedPropertyTracker & ChangedPropertyTracker) override final;
+	// virtual void PreReplication(IRepChangedPropertyTracker & ChangedPropertyTracker) override final;
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override final;
 
@@ -39,6 +39,15 @@ private:
 
 	UFUNCTION()
 	void OnRep_ServerLightColor();
+	
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastRPCChangeLightColor(const FLinearColor& NewColor);
+
+	UFUNCTION(Server, Unreliable, WithValidation)
+	void ServerRPCChangeLightColor();
+	
+	UFUNCTION(Client, Unreliable)
+	void ClientRPCChangeLightColor(const FLinearColor& NewColor);
 
 private:
 	UPROPERTY(ReplicatedUsing=OnRep_ServerRotationYaw)

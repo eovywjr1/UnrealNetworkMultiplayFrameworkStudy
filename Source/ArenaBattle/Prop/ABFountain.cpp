@@ -36,25 +36,54 @@ AABFountain::AABFountain()
 	bReplicates = true;
 	NetUpdateFrequency = 1.0f;
 	// NetDormancy = DORM_Initial;
+	NetCullDistanceSquared = 4000000.0f;
 }
 
 // Called when the game starts or when spawned
 void AABFountain::BeginPlay()
 {
 	Super::BeginPlay();
-
+	
 	if (HasAuthority())
 	{
 		// 휴면 상태 해지
-		FlushNetDormancy();
-	
-		FTimerHandle TimerHandle;
-		GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
-			                                       {
-				                                       ServerLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
-				                                       OnRep_ServerLightColor();
-			                                       }
-			                                       ), 1.0f, true, 0.0f);
+		// FlushNetDormancy();
+		//
+		// FTimerHandle TimerHandle;
+		// GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
+		// 	                                       {
+		// 		                                       // ServerLightColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+		// 		                                       // OnRep_ServerLightColor();
+		//
+		// 		                                       const FLinearColor NewColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+		// 		                                       // MulticastRPCChangeLightColor(NewColor);
+		// 		                                       ClientRPCChangeLightColor(NewColor);
+		// 	                                       }
+		// 	                                       ), 1.0f, true, -1.0f);
+		//
+		// FTimerHandle Client1BeginPlayTimerHandle;
+		// GetWorld()->GetTimerManager().SetTimer(Client1BeginPlayTimerHandle, FTimerDelegate::CreateLambda([this]()
+		// 	                                       {
+		// 		                                       for (FConstPlayerControllerIterator Iterator = GetWorld()->GetPlayerControllerIterator(); Iterator; ++Iterator)
+		// 		                                       {
+		// 			                                       APlayerController* PlayerController = Iterator->Get();
+		// 			                                       if (PlayerController && !PlayerController->IsLocalController())
+		// 			                                       {
+		// 				                                       SetOwner(PlayerController);
+		// 				                                       break;
+		// 			                                       }
+		// 		                                       }
+		// 	                                       }
+		// 	                                       ), 10.0f, false, -1.0f);
+	}
+	else
+	{
+		// FTimerHandle TimerHandle;
+		// GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
+		// 										   {
+		// 											   ServerRPCChangeLightColor();
+		// 										   }
+		// 										   ), 1.0f, true, 0.0f);
 	}
 }
 
@@ -115,5 +144,34 @@ void AABFountain::OnRep_ServerLightColor()
 	if (UPointLightComponent* PointLightComponent = FindComponentByClass<UPointLightComponent>())
 	{
 		PointLightComponent->SetLightColor(ServerLightColor);
+	}
+}
+
+void AABFountain::ClientRPCChangeLightColor_Implementation(const FLinearColor& NewColor)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("Light Color"));
+	if (UPointLightComponent* PointLightComponent = FindComponentByClass<UPointLightComponent>())
+	{
+		PointLightComponent->SetLightColor(NewColor);
+	}
+}
+
+bool AABFountain::ServerRPCChangeLightColor_Validate()
+{
+	return true;
+}
+
+void AABFountain::ServerRPCChangeLightColor_Implementation()
+{
+	const FLinearColor NewColor = FLinearColor(FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), FMath::RandRange(0.0f, 1.0f), 1.0f);
+	MulticastRPCChangeLightColor_Implementation(NewColor);
+}
+
+void AABFountain::MulticastRPCChangeLightColor_Implementation(const FLinearColor& NewColor)
+{
+	AB_LOG(LogABNetwork, Log, TEXT("Light Color"));
+	if (UPointLightComponent* PointLightComponent = FindComponentByClass<UPointLightComponent>())
+	{
+		PointLightComponent->SetLightColor(NewColor);
 	}
 }
