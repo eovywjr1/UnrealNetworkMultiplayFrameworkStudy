@@ -9,11 +9,13 @@
 #include "EnhancedInputSubsystems.h"
 #include "ABCharacterControlData.h"
 #include "ArenaBattle.h"
+#include "EngineUtils.h"
 #include "UI/ABHUDWidget.h"
 #include "CharacterStat/ABCharacterStatComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/GameStateBase.h"
 #include "Interface/ABGameInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "Physics/ABCollision.h"
@@ -225,8 +227,6 @@ void AABCharacterPlayer::QuaterMove(const FInputActionValue& Value)
 void AABCharacterPlayer::GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-	DOREPLIFETIME(ThisClass, bCanAttack);
 }
 
 void AABCharacterPlayer::Attack()
@@ -235,13 +235,28 @@ void AABCharacterPlayer::Attack()
 
 	if (bCanAttack)
 	{
-		ServerRPCAttack();
+		if (!HasAuthority())
+		{
+			bCanAttack = false;
+			GetCharacterMovement()->SetMovementMode(MOVE_None);
+
+			FTimerHandle TimerHandle;
+			GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
+			{
+				bCanAttack = true;
+				GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+			}), AttackTime, false, -0.1f);
+
+			GetMesh()->GetAnimInstance()->Montage_Play(ComboActionMontage);
+		}
+
+		ServerRPCAttack(GetWorld()->GetGameState()->GetServerWorldTimeSeconds());
 	}
 }
 
 void AABCharacterPlayer::AttackHitCheck()
 {
-	if (HasAuthority())
+	if (IsLocallyControlled())
 	{
 		AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
 
@@ -250,15 +265,31 @@ void AABCharacterPlayer::AttackHitCheck()
 
 		const float AttackRange = Stat->GetTotalStat().AttackRange;
 		const float AttackRadius = Stat->GetAttackRadius();
-		const float AttackDamage = Stat->GetTotalStat().Attack;
 		const FVector Start = GetActorLocation() + GetActorForwardVector() * GetCapsuleComponent()->GetScaledCapsuleRadius();
 		const FVector End = Start + GetActorForwardVector() * AttackRange;
 
 		bool HitDetected = GetWorld()->SweepSingleByChannel(OutHitResult, Start, End, FQuat::Identity, CCHANNEL_ABACTION, FCollisionShape::MakeSphere(AttackRadius), Params);
-		if (HitDetected)
+		const float HitCheckTime = GetWorld()->GetGameState()->GetServerWorldTimeSeconds();
+
+		if (HasAuthority())
 		{
-			FDamageEvent DamageEvent;
-			OutHitResult.GetActor()->TakeDamage(AttackDamage, DamageEvent, GetController(), this);
+			if (HitDetected)
+			{
+				FDamageEvent DamageEvent;
+				const float AttackDamage = Stat->GetTotalStat().Attack;
+				OutHitResult.GetActor()->TakeDamage(AttackDamage, DamageEvent, GetController(), this);
+			}
+		}
+		else
+		{
+			if (HitDetected)
+			{
+				ServerRPCNotifyHit(OutHitResult, HitCheckTime);
+			}
+			else
+			{
+				ServerRPCNotifyMiss(Start, End, GetActorForwardVector(), HitCheckTime);
+			}
 		}
 
 #if ENABLE_DRAW_DEBUG
@@ -271,42 +302,83 @@ void AABCharacterPlayer::AttackHitCheck()
 	}
 }
 
-void AABCharacterPlayer::ServerRPCAttack_Implementation()
+bool AABCharacterPlayer::ServerRPCNotifyHit_Validate(const FHitResult& HitResult, const float HitCheckTime)
 {
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-
-	MulticastRPCAttack();
+	return true;
 }
 
-void AABCharacterPlayer::MulticastRPCAttack_Implementation()
+void AABCharacterPlayer::ServerRPCNotifyHit_Implementation(const FHitResult& HitResult, const float HitCheckTime)
 {
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-
-	if (HasAuthority())
+	AActor* HitActor = HitResult.GetActor();
+	if (IsValid(HitActor))
 	{
-		bCanAttack = false;
-		OnRep_CanAttack();
+		const FVector HitLocation = HitResult.Location;
+		const FBox HitBox = HitActor->GetComponentsBoundingBox();
+		const FVector ActorBoxCenter = (HitBox.Min + HitBox.Max) * 0.5f;
 
-		FTimerHandle TimerHandle;
-		GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
+		const float AcceptCheckDistance = 300.0f;
+		if (FVector::DistSquared(HitLocation, ActorBoxCenter) <= AcceptCheckDistance * AcceptCheckDistance)
 		{
-			bCanAttack = true;
-			OnRep_CanAttack();
-		}), AttackTime, false, -0.1f);
+			FDamageEvent DamageEvent;
+			const float AttackDamage = Stat->GetTotalStat().Attack;
+			HitActor->TakeDamage(AttackDamage, DamageEvent, GetController(), this);
+		}
 	}
+}
+
+void AABCharacterPlayer::ServerRPCNotifyMiss_Implementation(const FVector TraceStart, const FVector TraceEnd, const FVector TraceDir, const float HitCheckTime) {}
+
+bool AABCharacterPlayer::ServerRPCNotifyMiss_Validate(const FVector TraceStart, const FVector TraceEnd, const FVector TraceDir, const float HitCheckTime)
+{
+	return true;
+}
+
+bool AABCharacterPlayer::ServerRPCAttack_Validate(float AttackStartTime)
+{
+	if (LastAttackStartTime == 0.0f)
+	{
+		return true;
+	}
+
+	return (AttackStartTime - LastAttackStartTime) > AttackTime;
+}
+
+void AABCharacterPlayer::ServerRPCAttack_Implementation(float AttackStartTime)
+{
+	bCanAttack = false;
+	GetCharacterMovement()->SetMovementMode(MOVE_None);
+
+	const float AttackTimeDifference = FMath::Clamp(GetWorld()->GetTimeSeconds() - AttackStartTime, 0.0f, AttackStartTime);
+	FTimerHandle TimerHandle;
+	GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
+	{
+		bCanAttack = true;
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}), AttackTime - AttackTimeDifference, false, -0.1f);
+
+	LastAttackStartTime = AttackStartTime;
 
 	GetMesh()->GetAnimInstance()->Montage_Play(ComboActionMontage);
+
+	//MulticastRPCAttack();
+
+	for (APlayerController* PlayerController : TActorRange<APlayerController>(GetWorld()))
+	{
+		if (PlayerController && PlayerController != GetController() && !PlayerController->IsLocalController())
+		{
+			if (AABCharacterPlayer* PlayerCharacter = Cast<AABCharacterPlayer>(PlayerController->GetPawn()))
+			{
+				PlayerCharacter->ClientRPCPlayAttackAnimation(this);
+			}
+		}
+	}
 }
 
-void AABCharacterPlayer::OnRep_CanAttack()
+void AABCharacterPlayer::ClientRPCPlayAttackAnimation_Implementation(AABCharacterPlayer* PlayCharacter)
 {
-	if (bCanAttack)
+	if (PlayCharacter)
 	{
-		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	}
-	else
-	{
-		GetCharacterMovement()->SetMovementMode(MOVE_None);
+		PlayCharacter->GetMesh()->GetAnimInstance()->Montage_Play(ComboActionMontage);
 	}
 }
 

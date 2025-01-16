@@ -13,7 +13,7 @@ UABCharacterStatComponent::UABCharacterStatComponent()
 
 	bWantsInitializeComponent = true;
 	
-	SetIsReplicated(true);
+	SetIsReplicatedByDefault(true);
 }
 
 void UABCharacterStatComponent::InitializeComponent()
@@ -60,5 +60,10 @@ void UABCharacterStatComponent::GetLifetimeReplicatedProps(TArray<class FLifetim
 void UABCharacterStatComponent::SetHp(float NewHp)
 {
 	CurrentHp = FMath::Clamp<float>(NewHp, 0.0f, BaseStat.MaxHp);
+	
+	if(GetOwner()->HasAuthority())
+	{
+		OnRep_CurrentHp();
+	}
 }
 

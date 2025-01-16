@@ -76,21 +76,24 @@ protected:
 	void Attack();
 	virtual void AttackHitCheck() override final;
 	
-	UFUNCTION(Server, Reliable)
-	void ServerRPCAttack();
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerRPCNotifyHit(const FHitResult& HitResult, const float HitCheckTime);
 	
-	UFUNCTION(NetMulticast, Reliable)
-	void MulticastRPCAttack();
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerRPCNotifyMiss(const FVector TraceStart, const FVector TraceEnd, const FVector TraceDir, const float HitCheckTime);
 	
-	UFUNCTION()
-	void OnRep_CanAttack();
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerRPCAttack(float AttackStartTime);
+	
+	UFUNCTION(Client, UnReliable)
+	void ClientRPCPlayAttackAnimation(AABCharacterPlayer* PlayCharacter);
 
 // UI Section
 protected:
 	virtual void SetupHUDWidget(class UABHUDWidget* InHUDWidget) override;
 	
 private:
-	UPROPERTY(ReplicatedUsing=OnRep_CanAttack)
 	uint8 bCanAttack : 1 = true;
 	const float AttackTime = 1.4667f;
+	float LastAttackStartTime = 0.0f;
 };

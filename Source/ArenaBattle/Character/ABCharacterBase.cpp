@@ -240,6 +240,8 @@ void AABCharacterBase::AttackHitCheck()
 
 float AABCharacterBase::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
+	check(HasAuthority());
+	
 	Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
 	Stat->ApplyDamage(DamageAmount);
