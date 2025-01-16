@@ -11,7 +11,12 @@
 #include "ArenaBattle.h"
 #include "UI/ABHUDWidget.h"
 #include "CharacterStat/ABCharacterStatComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Engine/DamageEvents.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Interface/ABGameInterface.h"
+#include "Net/UnrealNetwork.h"
+#include "Physics/ABCollision.h"
 
 AABCharacterPlayer::AABCharacterPlayer()
 {
@@ -217,9 +222,92 @@ void AABCharacterPlayer::QuaterMove(const FInputActionValue& Value)
 	AddMovementInput(MoveDirection, MovementVectorSize);
 }
 
+void AABCharacterPlayer::GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ThisClass, bCanAttack);
+}
+
 void AABCharacterPlayer::Attack()
 {
-	ProcessComboCommand();
+	//ProcessComboCommand();
+
+	if (bCanAttack)
+	{
+		ServerRPCAttack();
+	}
+}
+
+void AABCharacterPlayer::AttackHitCheck()
+{
+	if (HasAuthority())
+	{
+		AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+
+		FHitResult OutHitResult;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(Attack), false, this);
+
+		const float AttackRange = Stat->GetTotalStat().AttackRange;
+		const float AttackRadius = Stat->GetAttackRadius();
+		const float AttackDamage = Stat->GetTotalStat().Attack;
+		const FVector Start = GetActorLocation() + GetActorForwardVector() * GetCapsuleComponent()->GetScaledCapsuleRadius();
+		const FVector End = Start + GetActorForwardVector() * AttackRange;
+
+		bool HitDetected = GetWorld()->SweepSingleByChannel(OutHitResult, Start, End, FQuat::Identity, CCHANNEL_ABACTION, FCollisionShape::MakeSphere(AttackRadius), Params);
+		if (HitDetected)
+		{
+			FDamageEvent DamageEvent;
+			OutHitResult.GetActor()->TakeDamage(AttackDamage, DamageEvent, GetController(), this);
+		}
+
+#if ENABLE_DRAW_DEBUG
+		FVector CapsuleOrigin = Start + (End - Start) * 0.5f;
+		float CapsuleHalfHeight = AttackRange * 0.5f;
+		FColor DrawColor = HitDetected ? FColor::Green : FColor::Red;
+
+		DrawDebugCapsule(GetWorld(), CapsuleOrigin, CapsuleHalfHeight, AttackRadius, FRotationMatrix::MakeFromZ(GetActorForwardVector()).ToQuat(), DrawColor, false, 5.0f);
+#endif
+	}
+}
+
+void AABCharacterPlayer::ServerRPCAttack_Implementation()
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+
+	MulticastRPCAttack();
+}
+
+void AABCharacterPlayer::MulticastRPCAttack_Implementation()
+{
+	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
+
+	if (HasAuthority())
+	{
+		bCanAttack = false;
+		OnRep_CanAttack();
+
+		FTimerHandle TimerHandle;
+		GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
+		{
+			bCanAttack = true;
+			OnRep_CanAttack();
+		}), AttackTime, false, -0.1f);
+	}
+
+	GetMesh()->GetAnimInstance()->Montage_Play(ComboActionMontage);
+}
+
+void AABCharacterPlayer::OnRep_CanAttack()
+{
+	if (bCanAttack)
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	}
+	else
+	{
+		GetCharacterMovement()->SetMovementMode(MOVE_None);
+	}
 }
 
 void AABCharacterPlayer::SetupHUDWidget(UABHUDWidget* InHUDWidget)

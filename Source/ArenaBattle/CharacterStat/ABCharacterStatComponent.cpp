@@ -3,6 +3,7 @@
 
 #include "CharacterStat/ABCharacterStatComponent.h"
 #include "GameData/ABGameSingleton.h"
+#include "Net/UnrealNetwork.h"
 
 // Sets default values for this component's properties
 UABCharacterStatComponent::UABCharacterStatComponent()
@@ -11,6 +12,8 @@ UABCharacterStatComponent::UABCharacterStatComponent()
 	AttackRadius = 50.0f;
 
 	bWantsInitializeComponent = true;
+	
+	SetIsReplicated(true);
 }
 
 void UABCharacterStatComponent::InitializeComponent()
@@ -34,18 +37,28 @@ float UABCharacterStatComponent::ApplyDamage(float InDamage)
 	const float ActualDamage = FMath::Clamp<float>(InDamage, 0, InDamage);
 
 	SetHp(PrevHp - ActualDamage);
+	
+	return ActualDamage;
+}
+
+void UABCharacterStatComponent::OnRep_CurrentHp()
+{
+	OnHpChanged.Broadcast(CurrentHp);
 	if (CurrentHp <= KINDA_SMALL_NUMBER)
 	{
 		OnHpZero.Broadcast();
 	}
+}
 
-	return ActualDamage;
+void UABCharacterStatComponent::GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	
+	DOREPLIFETIME(ThisClass, CurrentHp);
 }
 
 void UABCharacterStatComponent::SetHp(float NewHp)
 {
 	CurrentHp = FMath::Clamp<float>(NewHp, 0.0f, BaseStat.MaxHp);
-	
-	OnHpChanged.Broadcast(CurrentHp);
 }
 

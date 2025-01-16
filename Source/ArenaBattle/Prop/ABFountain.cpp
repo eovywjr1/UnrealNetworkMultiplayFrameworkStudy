@@ -115,12 +115,6 @@ void AABFountain::Tick(float DeltaTime)
 	}
 }
 
-void AABFountain::PreReplication(IRepChangedPropertyTracker& ChangedPropertyTracker)
-{
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-	Super::PreReplication(ChangedPropertyTracker);
-}
-
 void AABFountain::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);

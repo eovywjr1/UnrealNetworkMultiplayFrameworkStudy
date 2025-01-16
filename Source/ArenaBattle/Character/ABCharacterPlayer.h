@@ -70,10 +70,27 @@ protected:
 	void QuaterMove(const FInputActionValue& Value);
 
 	ECharacterControlType CurrentCharacterControlType;
+	
+	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override final;
 
 	void Attack();
+	virtual void AttackHitCheck() override final;
+	
+	UFUNCTION(Server, Reliable)
+	void ServerRPCAttack();
+	
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastRPCAttack();
+	
+	UFUNCTION()
+	void OnRep_CanAttack();
 
 // UI Section
 protected:
 	virtual void SetupHUDWidget(class UABHUDWidget* InHUDWidget) override;
+	
+private:
+	UPROPERTY(ReplicatedUsing=OnRep_CanAttack)
+	uint8 bCanAttack : 1 = true;
+	const float AttackTime = 1.4667f;
 };

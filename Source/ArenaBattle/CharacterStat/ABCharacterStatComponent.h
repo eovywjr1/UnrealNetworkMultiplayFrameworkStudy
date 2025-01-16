@@ -41,11 +41,17 @@ public:
 	FORCEINLINE void HealHp(float InHealAmount) { CurrentHp = FMath::Clamp(CurrentHp + InHealAmount, 0, GetTotalStat().MaxHp); OnHpChanged.Broadcast(CurrentHp); }
 	FORCEINLINE float GetAttackRadius() const { return AttackRadius; }
 	float ApplyDamage(float InDamage);
+	
+private:
+	UFUNCTION()
+	void OnRep_CurrentHp();
+	
+	virtual void GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const override final;
 
 protected:
 	void SetHp(float NewHp);
 
-	UPROPERTY(Transient, VisibleInstanceOnly, Category = Stat)
+	UPROPERTY(ReplicatedUsing=OnRep_CurrentHp, Transient, VisibleInstanceOnly, Category = Stat)
 	float CurrentHp;
 
 	UPROPERTY(Transient, VisibleInstanceOnly, Category = Stat)
