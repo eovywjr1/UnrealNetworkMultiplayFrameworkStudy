@@ -6,7 +6,8 @@
 #include "AI/ABAIController.h"
 #include "CharacterStat/ABCharacterStatComponent.h"
 
-AABCharacterNonPlayer::AABCharacterNonPlayer()
+AABCharacterNonPlayer::AABCharacterNonPlayer(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
 {
 	GetMesh()->SetHiddenInGame(true);
 
@@ -35,11 +36,11 @@ void AABCharacterNonPlayer::SetDead()
 
 	FTimerHandle DeadTimerHandle;
 	GetWorld()->GetTimerManager().SetTimer(DeadTimerHandle, FTimerDelegate::CreateLambda(
-		[&]()
-		{
-			Destroy();
-		}
-	), DeadEventDelayTime, false);
+		                                       [&]()
+		                                       {
+			                                       Destroy();
+		                                       }
+		                                       ), DeadEventDelayTime, false);
 }
 
 void AABCharacterNonPlayer::NPCMeshLoadCompleted()

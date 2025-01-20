@@ -8,6 +8,7 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "ABCharacterControlData.h"
+#include "ABCharacterMovementComponent.h"
 #include "ArenaBattle.h"
 #include "EngineUtils.h"
 #include "UI/ABHUDWidget.h"
@@ -20,7 +21,8 @@
 #include "Net/UnrealNetwork.h"
 #include "Physics/ABCollision.h"
 
-AABCharacterPlayer::AABCharacterPlayer()
+AABCharacterPlayer::AABCharacterPlayer(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UABCharacterMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	// Camera
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
@@ -67,6 +69,12 @@ AABCharacterPlayer::AABCharacterPlayer()
 	if (nullptr != InputActionAttackRef.Object)
 	{
 		AttackAction = InputActionAttackRef.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputAction> TeleportActionAttackRef(TEXT("/Script/EnhancedInput.InputAction'/Game/ArenaBattle/Input/Actions/IA_Teleport.IA_Teleport'"));
+	if (TeleportActionAttackRef.Object)
+	{
+		TeleportAction = TeleportActionAttackRef.Object;
 	}
 
 	CurrentCharacterControlType = ECharacterControlType::Quater;
@@ -127,6 +135,7 @@ void AABCharacterPlayer::SetupPlayerInputComponent(class UInputComponent* Player
 	EnhancedInputComponent->BindAction(ShoulderLookAction, ETriggerEvent::Triggered, this, &AABCharacterPlayer::ShoulderLook);
 	EnhancedInputComponent->BindAction(QuaterMoveAction, ETriggerEvent::Triggered, this, &AABCharacterPlayer::QuaterMove);
 	EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &AABCharacterPlayer::Attack);
+	EnhancedInputComponent->BindAction(TeleportAction, ETriggerEvent::Triggered, this, &AABCharacterPlayer::Teleport);
 }
 
 void AABCharacterPlayer::ChangeCharacterControl()
@@ -182,7 +191,7 @@ void AABCharacterPlayer::SetCharacterControlData(const UABCharacterControlData* 
 
 void AABCharacterPlayer::ShoulderMove(const FInputActionValue& Value)
 {
-	if(!bCanAttack)
+	if (!bCanAttack)
 	{
 		return;
 	}
@@ -209,7 +218,7 @@ void AABCharacterPlayer::ShoulderLook(const FInputActionValue& Value)
 
 void AABCharacterPlayer::QuaterMove(const FInputActionValue& Value)
 {
-	if(!bCanAttack)
+	if (!bCanAttack)
 	{
 		return;
 	}
@@ -402,4 +411,9 @@ void AABCharacterPlayer::SetupHUDWidget(UABHUDWidget* InHUDWidget)
 		Stat->OnStatChanged.AddUObject(InHUDWidget, &UABHUDWidget::UpdateStat);
 		Stat->OnHpChanged.AddUObject(InHUDWidget, &UABHUDWidget::UpdateHpBar);
 	}
+}
+
+void AABCharacterPlayer::Teleport()
+{
+	Cast<UABCharacterMovementComponent>(GetCharacterMovement())->SetTeleportCommand();
 }
