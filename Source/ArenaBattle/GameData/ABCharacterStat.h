@@ -42,4 +42,23 @@ public:
 
 		return Result;
 	}
+	
+	bool NetSerialize(FArchive& Ar, class UPackageMap* Map, bool& bOutSuccess)
+	{
+		uint32 uMaxHp = static_cast<uint32>(MaxHp);
+		Ar.SerializeIntPacked(uMaxHp);
+
+		MaxHp = static_cast<float>(uMaxHp);
+	
+		return true;
+	}
+};
+
+template<>
+struct TStructOpsTypeTraits<FABCharacterStat> : public TStructOpsTypeTraitsBase2<FABCharacterStat>
+{
+	enum
+	{
+		WithNetSerializer = true,
+	};
 };
