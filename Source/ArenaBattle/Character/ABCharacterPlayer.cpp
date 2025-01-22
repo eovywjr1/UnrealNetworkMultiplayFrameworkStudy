@@ -14,6 +14,7 @@
 #include "UI/ABHUDWidget.h"
 #include "CharacterStat/ABCharacterStatComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/WidgetComponent.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/GameStateBase.h"
@@ -96,6 +97,8 @@ void AABCharacterPlayer::BeginPlay()
 void AABCharacterPlayer::SetDead()
 {
 	Super::SetDead();
+	
+	GetWorldTimerManager().SetTimer(DeadTimerHandle, this, &AABCharacterPlayer::ResetPlayer, 5.0f, false);
 
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
 	if (PlayerController)
@@ -259,12 +262,7 @@ void AABCharacterPlayer::Attack()
 			bCanAttack = false;
 			GetCharacterMovement()->SetMovementMode(MOVE_None);
 
-			FTimerHandle TimerHandle;
-			GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
-			{
-				bCanAttack = true;
-				GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-			}), AttackTime, false, -0.1f);
+			GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::ResetAttack, AttackTime, false);
 
 			GetMesh()->GetAnimInstance()->Montage_Play(ComboActionMontage);
 		}
@@ -359,7 +357,8 @@ bool AABCharacterPlayer::ServerRPCAttack_Validate(float AttackStartTime)
 		return true;
 	}
 
-	return (AttackStartTime - LastAttackStartTime) > AttackTime;
+	// 조건이 타이트해서 0.4만큼 오차를 추가
+	return (AttackStartTime - LastAttackStartTime) > AttackTime - 0.4f;
 }
 
 void AABCharacterPlayer::ServerRPCAttack_Implementation(float AttackStartTime)
@@ -368,12 +367,8 @@ void AABCharacterPlayer::ServerRPCAttack_Implementation(float AttackStartTime)
 	GetCharacterMovement()->SetMovementMode(MOVE_None);
 
 	const float AttackTimeDifference = FMath::Clamp(GetWorld()->GetTimeSeconds() - AttackStartTime, 0.0f, AttackStartTime);
-	FTimerHandle TimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(TimerHandle, FTimerDelegate::CreateLambda([this]()
-	{
-		bCanAttack = true;
-		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-	}), AttackTime - AttackTimeDifference, false, -0.1f);
+
+	GetWorld()->GetTimerManager().SetTimer(AttackTimerHandle, this, &ThisClass::ResetAttack, AttackTime - AttackTimeDifference, false);
 
 	LastAttackStartTime = AttackStartTime;
 
@@ -416,4 +411,51 @@ void AABCharacterPlayer::SetupHUDWidget(UABHUDWidget* InHUDWidget)
 void AABCharacterPlayer::Teleport()
 {
 	Cast<UABCharacterMovementComponent>(GetCharacterMovement())->SetTeleportCommand();
+}
+
+void AABCharacterPlayer::ResetPlayer()
+{
+	if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+	{
+		AnimInstance->StopAllMontages(0.0f);
+	}
+
+	Stat->SetLevelStat(1);
+	Stat->ResetStat();
+
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	SetActorEnableCollision(true);
+
+	HpBar->SetHiddenInGame(false);
+
+	if (HasAuthority())
+	{
+		if (IABGameInterface* ABGameMode = GetWorld()->GetAuthGameMode<IABGameInterface>())
+		{
+			const FTransform NewTransform = ABGameMode->GetRandomStartTransform();
+			TeleportTo(NewTransform.GetLocation(), NewTransform.GetRotation().Rotator());
+		}
+	}
+}
+
+void AABCharacterPlayer::ResetAttack()
+{
+	bCanAttack = true;
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+}
+
+// 서버에서 현재 누구한테 데미지를 받았는지 표시하도로 확장
+float AABCharacterPlayer::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+{
+	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	if (Stat->GetCurrentHp() <= 0.0f)
+	{
+		if (IABGameInterface* ABGameMode = GetWorld()->GetAuthGameMode<IABGameInterface>())
+		{
+			ABGameMode->OnPlayerKilled(EventInstigator, GetController(), this);
+		}
+	}
+
+	return ActualDamage;
 }

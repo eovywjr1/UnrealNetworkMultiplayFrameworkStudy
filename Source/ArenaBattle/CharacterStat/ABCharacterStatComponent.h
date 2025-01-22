@@ -43,6 +43,8 @@ public:
 	FORCEINLINE float GetAttackRadius() const { return AttackRadius; }
 	float ApplyDamage(float InDamage);
 	
+	void ResetStat();
+	
 private:
 	UFUNCTION()
 	void OnRep_CurrentHp();

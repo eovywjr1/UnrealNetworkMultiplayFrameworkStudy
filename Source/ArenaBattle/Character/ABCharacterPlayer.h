@@ -103,4 +103,15 @@ private:
 // Teleport Section
 private:
 	void Teleport();
+	
+	// Pvp Section
+public:
+	void ResetPlayer();
+	void ResetAttack();
+	
+	FTimerHandle AttackTimerHandle;
+	FTimerHandle DeadTimerHandle;
+	
+private:
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override final;
 };

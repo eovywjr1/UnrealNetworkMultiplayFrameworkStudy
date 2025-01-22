@@ -6,6 +6,8 @@
 
 #include "ABGameState.h"
 #include "ArenaBattle.h"
+#include "EngineUtils.h"
+#include "GameFramework/PlayerStart.h"
 #include "Player/ABPlayerController.h"
 
 AABGameMode::AABGameMode()
@@ -21,34 +23,43 @@ AABGameMode::AABGameMode()
 	{
 		PlayerControllerClass = PlayerControllerClassRef.Class;
 	}
-	
+
 	GameStateClass = AABGameState::StaticClass();
 }
 
-void AABGameMode::OnPlayerDead()
-{
+void AABGameMode::OnPlayerKilled(AController* Killer, AController* KilledPlayer, APawn* KilledPawn) const
+{}
 
+FTransform AABGameMode::GetRandomStartTransform()
+{
+	if(PlayerStarts.IsEmpty())
+	{
+		return FTransform(FVector(0.0f, 0.0f, 230.0f));
+	}
+	
+	const int32 RandomIndex = FMath::RandRange(0, PlayerStarts.Num() - 1);
+	return PlayerStarts[RandomIndex]->GetActorTransform();
 }
 
 void AABGameMode::PreLogin(const FString& Options, const FString& Address, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
 {
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("==============================================="));
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-	
+
 	Super::PreLogin(Options, Address, UniqueId, ErrorMessage);
 	// ErrorMessage = TEXT("Server Is Full");
-	
+
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
 }
 
 APlayerController* AABGameMode::Login(UPlayer* NewPlayer, ENetRole InRemoteRole, const FString& Portal, const FString& Options, const FUniqueNetIdRepl& UniqueId, FString& ErrorMessage)
 {
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
-	
+
 	APlayerController* NewPlayerController = Super::Login(NewPlayer, InRemoteRole, Portal, Options, UniqueId, ErrorMessage);
-	
+
 	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
-	
+
 	return NewPlayerController;
 }
 
@@ -61,7 +72,10 @@ void AABGameMode::PostLogin(APlayerController* NewPlayer)
 
 void AABGameMode::StartPlay()
 {
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("Begin"));
 	Super::StartPlay();
-	AB_LOG(LogABNetwork, Log, TEXT("%s"), TEXT("End"));
+
+	for (APlayerStart* PlayerStart : TActorRange<APlayerStart>(GetWorld()))
+	{
+		PlayerStarts.Add(PlayerStart);
+	}
 }

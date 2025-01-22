@@ -21,8 +21,7 @@ void UABCharacterStatComponent::InitializeComponent()
 	Super::InitializeComponent();
 
 	SetLevelStat(CurrentLevel);
-	MaxHp = BaseStat.MaxHp;
-	SetHp(MaxHp);
+	ResetStat();
 	
 	OnStatChanged.AddUObject(this, &ThisClass::SetMaxHp);
 }
@@ -44,10 +43,17 @@ float UABCharacterStatComponent::ApplyDamage(float InDamage)
 	return ActualDamage;
 }
 
+void UABCharacterStatComponent::ResetStat()
+{
+	SetLevelStat(CurrentLevel);
+	MaxHp = BaseStat.MaxHp;
+	SetHp(MaxHp);
+}
+
 void UABCharacterStatComponent::OnRep_CurrentHp()
 {
 	OnHpChanged.Broadcast(CurrentHp, MaxHp);
-	if (CurrentHp <= KINDA_SMALL_NUMBER)
+	if (CurrentHp <= 0.0f)
 	{
 		OnHpZero.Broadcast();
 	}
